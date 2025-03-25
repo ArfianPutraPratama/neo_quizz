@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // Untuk SystemNavigator
 import '../widgets/app_button.dart';
-import '../screens/quiz_screen.dart';
+import '../screens/menu_screen.dart';
 import '../screens/achivement_screen.dart';
 import '../screens/setting_screen.dart';
+import '../audio/audio_manager.dart'; // Import AudioManager
 
 class NeoQuizHomeScreen extends StatefulWidget {
   const NeoQuizHomeScreen({Key? key}) : super(key: key);
@@ -29,7 +30,8 @@ class _NeoQuizHomeScreenState extends State<NeoQuizHomeScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // Lakukan inisialisasi ulang di sini
+      // Lanjutkan musik saat aplikasi dibuka kembali
+      AudioManager().resume();
       print("Aplikasi dibuka kembali");
     }
   }
@@ -52,7 +54,7 @@ class _NeoQuizHomeScreenState extends State<NeoQuizHomeScreen>
                     ClipRRect(
                       borderRadius: BorderRadius.circular(117),
                       child: Image.asset(
-                        'assets/images/logo.png',
+                        'assets/images/logoapk.png',
                         width: 198,
                         height: 196,
                         fit: BoxFit.cover,
@@ -91,10 +93,18 @@ class _NeoQuizHomeScreenState extends State<NeoQuizHomeScreen>
                       AppButton(
                         text: 'Start Kuis',
                         onPressed: () {
+                          // Mulai memutar musik saat tombol ditekan
+                          AudioManager().initAndPlay().then((_) {
+                            print("Background music started");
+                          }).catchError((error) {
+                            print("Error starting background music: $error");
+                          });
+
+                          // Pindah ke halaman QuizScreen
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => const Halaman_pertama(),
+                              builder: (context) => const Menu_Screens(),
                             ),
                           );
                         },
@@ -103,6 +113,7 @@ class _NeoQuizHomeScreenState extends State<NeoQuizHomeScreen>
                       AppButton(
                         text: 'Achievement',
                         onPressed: () {
+                          // Pindah ke halaman AchievementScreen tanpa menghentikan musik
                           Navigator.push(
                             context,
                             MaterialPageRoute(
@@ -115,6 +126,7 @@ class _NeoQuizHomeScreenState extends State<NeoQuizHomeScreen>
                       AppButton(
                         text: 'Setting',
                         onPressed: () {
+                          // Pindah ke halaman SettingsScreen tanpa menghentikan musik
                           Navigator.push(
                             context,
                             MaterialPageRoute(

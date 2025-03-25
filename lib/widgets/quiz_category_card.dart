@@ -8,6 +8,7 @@ class QuizCard extends StatelessWidget {
   final String questionCount;
   final String duration;
   final String iconPath;
+  final int quizId; // Add quizId parameter
 
   const QuizCard({
     super.key,
@@ -17,6 +18,7 @@ class QuizCard extends StatelessWidget {
     required this.questionCount,
     required this.duration,
     required this.iconPath,
+    required this.quizId, // Add quizId to constructor
   });
 
   @override
@@ -43,7 +45,11 @@ class QuizCard extends StatelessWidget {
               showDialog(
                 context: context,
                 barrierColor: Colors.black.withOpacity(0.5),
-                builder: (context) => LevelSelectionDialog(quizTitle: title),
+                builder: (context) => LevelSelectionDialog(
+                  quizTitle: title,
+                  quizId: quizId, // Pass quizId
+                  userId: 1,
+                ),
               );
             } else {
               ScaffoldMessenger.of(context).showSnackBar(

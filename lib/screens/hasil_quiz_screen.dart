@@ -1,20 +1,98 @@
 import 'package:flutter/material.dart';
 import 'package:percent_indicator/circular_percent_indicator.dart';
+import '../services/hasil_quiz_services.dart';
+import 'menu_screen.dart';
+import 'level_screen.dart';
 import '../screens/setting_screen.dart';
-import '../screens/level1_screen.dart';
-import '../screens/quiz_screen.dart';
 
-class QuizResultScreen extends StatelessWidget {
+class HasilQuizScreen extends StatefulWidget {
   final int correctAnswers;
   final int totalQuestions;
   final Duration timeSpent;
+  final String deviceId;
+  final int level;
+  final int quizId;
 
-  const QuizResultScreen({
+  const HasilQuizScreen({
     Key? key,
     required this.correctAnswers,
     required this.totalQuestions,
     required this.timeSpent,
+    required this.deviceId,
+    required this.level,
+    required this.quizId,
   }) : super(key: key);
+
+  @override
+  _HasilQuizScreenState createState() => _HasilQuizScreenState();
+}
+
+class _HasilQuizScreenState extends State<HasilQuizScreen> {
+  bool _hasUpdatedScore = false;
+  int? _fetchedScore;
+  int _percentageScore = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _percentageScore = widget.totalQuestions > 0
+        ? ((widget.correctAnswers / widget.totalQuestions) * 100).round()
+        : 0;
+    _updateLevelScore();
+  }
+
+  Future<void> _updateLevelScore() async {
+    if (_hasUpdatedScore) return;
+    setState(() => _hasUpdatedScore = true);
+
+    const int maxRetries = 3;
+    int retryCount = 0;
+
+    while (retryCount < maxRetries) {
+      try {
+        final response = await QuizService.updateLevelScore(
+          deviceId: widget.deviceId,
+          quizId: widget.quizId,
+          level: widget.level,
+          score: _percentageScore,
+        );
+
+        if (response['status'] == 'success') {
+          await _fetchScore();
+          break;
+        } else {
+          print('Failed to update score: ${response['message']}');
+          break;
+        }
+      } catch (e) {
+        print('Error updating score (attempt ${retryCount + 1}): $e');
+        retryCount++;
+        if (retryCount == maxRetries) {
+          print('Max retries reached. Failed to update score.');
+          break;
+        }
+        await Future.delayed(const Duration(seconds: 2));
+      }
+    }
+  }
+
+  Future<void> _fetchScore() async {
+    try {
+      final response = await QuizService.getUserScore(
+        deviceId: widget.deviceId,
+        quizId: widget.quizId,
+        level: widget.level,
+      );
+
+      if (response['status'] == 'success') {
+        setState(() {
+          _fetchedScore = response['data']['score'];
+        });
+      }
+    } catch (e) {
+      print('Error fetching score: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,72 +101,59 @@ class QuizResultScreen extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            // App Bar
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: Row(
+                mainAxisAlignment:
+                    MainAxisAlignment.spaceBetween, // Menyeimbangkan elemen
                 children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Container(
-                      height: 40,
-                      width: 40,
-                      child: const Icon(
-                        Icons.chevron_left,
-                        color: Colors.white,
-                        size: 32,
-                      ),
-                    ),
+                  // Tambahkan widget kosong untuk menyeimbangkan tata letak
+                  IconButton(
+                    icon: const Icon(Icons.menu,
+                        color: Colors.transparent), // Ikon transparan
+                    onPressed: null, // Tidak ada aksi
                   ),
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      'Sempurna',
+                      'Hasil Quiz',
                       style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold),
                       textAlign: TextAlign.center,
                     ),
                   ),
                   IconButton(
                     icon: const Icon(Icons.settings, color: Colors.white),
                     onPressed: () {
-                      // Navigate to tampilan_menu.dart
-                      Navigator.push(
+                      Navigator.pushReplacement(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const SettingsScreen(),
-                        ),
+                            builder: (context) => const SettingsScreen()),
                       );
                     },
                   ),
                 ],
               ),
             ),
-
-            // Score Circle
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 32.0),
               child: CircularPercentIndicator(
                 radius: 80.0,
                 lineWidth: 12.0,
-                percent: correctAnswers / totalQuestions,
+                percent: widget.correctAnswers / widget.totalQuestions,
                 center: Text(
-                  '${(correctAnswers / totalQuestions * 100).round()}',
+                  '$_percentageScore%',
                   style: const TextStyle(
-                    fontSize: 48,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
+                      fontSize: 48,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white),
                 ),
                 progressColor: Colors.cyan,
                 backgroundColor: Colors.cyan.withOpacity(0.2),
                 circularStrokeCap: CircularStrokeCap.round,
               ),
             ),
-
-            // Stats Container
             Container(
               margin: const EdgeInsets.all(16),
               padding: const EdgeInsets.all(16),
@@ -102,17 +167,16 @@ class QuizResultScreen extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
                       _buildStatItem(
-                        icon: Icons.check_circle,
-                        color: Colors.green,
-                        text: '$correctAnswers Soal',
-                        textColor: Colors.white,
-                      ),
+                          icon: Icons.check_circle,
+                          color: Colors.green,
+                          text: '${widget.correctAnswers} Benar',
+                          textColor: Colors.white),
                       _buildStatItem(
-                        icon: Icons.cancel,
-                        color: Colors.red,
-                        text: '${totalQuestions - correctAnswers} Soal',
-                        textColor: Colors.white,
-                      ),
+                          icon: Icons.cancel,
+                          color: Colors.red,
+                          text:
+                              '${widget.totalQuestions - widget.correctAnswers} Salah',
+                          textColor: Colors.white),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -123,46 +187,51 @@ class QuizResultScreen extends StatelessWidget {
                         icon: Icons.timer,
                         color: Colors.blue,
                         text:
-                            '${timeSpent.inMinutes}:${(timeSpent.inSeconds % 60).toString().padLeft(2, '0')}',
+                            '${widget.timeSpent.inMinutes}:${(widget.timeSpent.inSeconds % 60).toString().padLeft(2, '0')}',
                         textColor: Colors.white,
                       ),
                       _buildStatItem(
-                        icon: Icons.info,
-                        color: Colors.blue,
-                        text: '$correctAnswers/$totalQuestions',
-                        textColor: Colors.white,
-                      ),
+                          icon: Icons.help_outline,
+                          color: Colors.blue,
+                          text:
+                              '${widget.correctAnswers}/${widget.totalQuestions}',
+                          textColor: Colors.white),
                     ],
                   ),
+                  const SizedBox(height: 16),
+                  if (_fetchedScore != null)
+                    _buildStatItem(
+                      icon: Icons.star,
+                      color: Colors.yellow,
+                      text: 'Skor: $_fetchedScore%',
+                      textColor: Colors.white,
+                    ),
                 ],
               ),
             ),
-
             const Spacer(),
-
-            // Bottom Buttons
-            // Bottom Buttons
-            // Bottom Buttons
             Container(
               padding: const EdgeInsets.symmetric(vertical: 50),
               width: double.infinity,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Play Again (diberi padding kanan untuk geser ke kanan)
                   Expanded(
                     child: Padding(
-                      padding:
-                          const EdgeInsets.only(left: 30.0), // Geser ke kanan
+                      padding: const EdgeInsets.only(left: 30.0),
                       child: _buildBottomButton(
                         icon: Icons.refresh,
-                        label: 'Play Again',
+                        label: 'Ulangi',
                         onPressed: () {
-                          // Navigate to tampilan_menu.dart
-                          Navigator.push(
+                          Navigator.pushReplacement(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => const Level1Screen(),
+                              builder: (context) => Level_Screen(
+                                deviceId: widget.deviceId,
+                                quizId: widget.quizId,
+                                level: widget.level,
+                                onLevelCompleted: () => print('Level selesai!'),
+                              ),
                             ),
                           );
                         },
@@ -170,34 +239,39 @@ class QuizResultScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-
-                  // Menu (tetap di tengah)
                   Expanded(
                     child: _buildBottomButton(
                       icon: Icons.menu,
                       label: 'Menu',
                       onPressed: () {
-                        // Navigate to tampilan_menu.dart
-                        Navigator.push(
+                        Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => const Halaman_pertama(),
-                          ),
+                              builder: (context) => const Menu_Screens()),
                         );
                       },
                       color: Colors.white,
                     ),
                   ),
-
-                  // Next (diberi padding kiri untuk geser ke kiri)
                   Expanded(
                     child: Padding(
-                      padding:
-                          const EdgeInsets.only(right: 30.0), // Geser ke kiri
+                      padding: const EdgeInsets.only(right: 30.0),
                       child: _buildBottomButton(
                         icon: Icons.play_arrow,
-                        label: 'Next',
-                        onPressed: () {},
+                        label: 'Lanjut',
+                        onPressed: () {
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => Level_Screen(
+                                deviceId: widget.deviceId,
+                                quizId: widget.quizId,
+                                level: widget.level + 1,
+                                onLevelCompleted: () => print('Level selesai!'),
+                              ),
+                            ),
+                          );
+                        },
                         color: Colors.white,
                       ),
                     ),
@@ -222,19 +296,12 @@ class QuizResultScreen extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            icon,
-            color: color,
-            size: 24,
-          ),
+          Icon(icon, color: color, size: 24),
           const SizedBox(width: 8),
           Text(
             text,
             style: TextStyle(
-              color: textColor,
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
+                color: textColor, fontSize: 16, fontWeight: FontWeight.bold),
           ),
         ],
       ),
@@ -250,9 +317,7 @@ class QuizResultScreen extends StatelessWidget {
     return TextButton(
       onPressed: onPressed,
       style: ButtonStyle(
-        overlayColor: MaterialStateProperty.all(
-            Colors.transparent), // Hilangkan efek splash dan highlight
-      ),
+          overlayColor: MaterialStateProperty.all(Colors.transparent)),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -261,10 +326,7 @@ class QuizResultScreen extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-              color: color,
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-            ),
+                color: color, fontSize: 14, fontWeight: FontWeight.bold),
           ),
         ],
       ),

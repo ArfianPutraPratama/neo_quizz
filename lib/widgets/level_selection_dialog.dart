@@ -1,55 +1,20 @@
 import 'package:flutter/material.dart';
-import '../screens/level1_screen.dart'; // Pastikan import ini sesuai dengan struktur proyek Anda
-
-void main() {
-  runApp(const MyApp());
-}
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Level Selection Demo',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-      ),
-      home: const LevelSelectionPage(),
-    );
-  }
-}
-
-class LevelSelectionPage extends StatelessWidget {
-  const LevelSelectionPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Pilih Level'),
-      ),
-      body: Center(
-        child: ElevatedButton(
-          onPressed: () {
-            showDialog(
-              context: context,
-              builder: (context) {
-                return const LevelSelectionDialog(quizTitle: 'Kuis');
-              },
-            );
-          },
-          child: const Text('Tampilkan Dialog Level'),
-        ),
-      ),
-    );
-  }
-}
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:device_info_plus/device_info_plus.dart';
+import '../screens/level_screen.dart';
 
 class LevelSelectionDialog extends StatefulWidget {
   final String quizTitle;
+  final int quizId;
+  final int userId;
 
-  const LevelSelectionDialog({super.key, required this.quizTitle});
+  const LevelSelectionDialog({
+    Key? key,
+    required this.quizTitle,
+    required this.quizId,
+    required this.userId,
+  }) : super(key: key);
 
   @override
   State<LevelSelectionDialog> createState() => _LevelSelectionDialogState();
@@ -59,9 +24,15 @@ class _LevelSelectionDialogState extends State<LevelSelectionDialog>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<Offset> _animation;
-  int? selectedLevel; // Menyimpan level yang dipilih
-  bool isLevel1Completed = false; // Contoh: Level 1 sudah selesai
-  bool isLevel2Completed = false; // Contoh: Level 2 belum selesai
+  int? selectedLevel;
+  bool isLevel1Completed = false;
+  bool isLevel2Completed = false;
+  bool isLevel3Completed = false;
+  bool isLevel4Completed = false;
+  String username = '';
+  String deviceId = '';
+  final TextEditingController _usernameController = TextEditingController();
+  bool isUserAssigned = false;
 
   @override
   void initState() {
@@ -71,8 +42,8 @@ class _LevelSelectionDialogState extends State<LevelSelectionDialog>
       duration: const Duration(milliseconds: 500),
     );
     _animation = Tween<Offset>(
-      begin: const Offset(0.0, 1.0), // Start from bottom
-      end: Offset.zero, // End at original position
+      begin: const Offset(0.0, 1.0),
+      end: Offset.zero,
     ).animate(CurvedAnimation(
       parent: _controller,
       curve: Curves.easeInOut,
@@ -81,18 +52,94 @@ class _LevelSelectionDialogState extends State<LevelSelectionDialog>
   }
 
   @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _getDeviceIdAndCheckUser();
   }
 
-  void _showLockedLevelDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return const LockedLevelDialog();
-      },
-    );
+  Future<void> _getDeviceIdAndCheckUser() async {
+    DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
+    String id = '';
+    try {
+      if (Theme.of(context).platform == TargetPlatform.android) {
+        AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
+        id = androidInfo.id ?? 'unknown_android';
+      } else if (Theme.of(context).platform == TargetPlatform.iOS) {
+        IosDeviceInfo iosInfo = await deviceInfo.iosInfo;
+        id = iosInfo.identifierForVendor ?? 'unknown_ios';
+      } else {
+        id = 'unsupported_platform';
+      }
+      setState(() => deviceId = id);
+      await _checkUserByDeviceId();
+    } catch (e) {
+      print('Error fetching device ID: $e');
+      setState(() => deviceId = 'error_$e');
+    }
+  }
+
+  Future<void> _checkUserByDeviceId() async {
+    try {
+      final response = await http.get(
+        Uri.parse(
+            'http://192.168.0.110/aplikasiquizz/check_user_by_device.php?device_id=$deviceId&quiz_id=${widget.quizId}'),
+      );
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        if (data['status'] == 'success' && data['username'] != null) {
+          setState(() {
+            isUserAssigned = true;
+            username = data['username'];
+            _usernameController.text = username;
+            isLevel1Completed = data['level1_completed'] == 1;
+            isLevel2Completed = data['level2_completed'] == 1;
+            isLevel3Completed = data['level3_completed'] == 1;
+            isLevel4Completed = data['level4_completed'] == 1;
+          });
+        }
+      }
+    } catch (e) {
+      print('Error checking user by device: $e');
+    }
+  }
+
+  Future<void> _saveUsername(String deviceId, String username) async {
+    try {
+      final response = await http.post(
+        Uri.parse('http://192.168.0.110/aplikasiquizz/save_username.php'),
+        headers: <String, String>{
+          'Content-Type': 'application/json; charset=UTF-8',
+        },
+        body: jsonEncode(<String, dynamic>{
+          'device_id': deviceId,
+          'username': username,
+        }),
+      );
+      print('Save username response: ${response.body}');
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        if (data['status'] == 'success') {
+          setState(() {
+            isUserAssigned = true;
+            this.username = username;
+          });
+          await _checkUserByDeviceId();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(data['message'])),
+          );
+        }
+      }
+    } catch (e) {
+      print('Error saving username: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _usernameController.dispose();
+    super.dispose();
   }
 
   @override
@@ -101,11 +148,8 @@ class _LevelSelectionDialogState extends State<LevelSelectionDialog>
       animation: _animation,
       builder: (context, child) {
         return GestureDetector(
-          onTap: () {
-            _controller.reverse().then((_) {
-              Navigator.of(context).pop(); // Tutup dialog setelah animasi
-            });
-          },
+          onTap: () =>
+              _controller.reverse().then((_) => Navigator.pop(context)),
           child: Material(
             color: Colors.transparent,
             child: SlideTransition(
@@ -115,10 +159,10 @@ class _LevelSelectionDialogState extends State<LevelSelectionDialog>
                 backgroundColor: Colors.transparent,
                 alignment: Alignment.bottomCenter,
                 child: GestureDetector(
-                  onTap: () {}, // Mencegah penutupan saat dialog diklik
+                  onTap: () {},
                   child: Container(
                     width: 410,
-                    height: 420, // Sesuaikan tinggi sesuai desain baru
+                    height: 490,
                     child: Stack(
                       children: [
                         Positioned(
@@ -126,7 +170,7 @@ class _LevelSelectionDialogState extends State<LevelSelectionDialog>
                           top: 0,
                           child: Container(
                             width: 410,
-                            height: 500,
+                            height: 510,
                             decoration: ShapeDecoration(
                               gradient: LinearGradient(
                                 begin: Alignment(0.50, -0.00),
@@ -152,271 +196,125 @@ class _LevelSelectionDialogState extends State<LevelSelectionDialog>
                             ),
                           ),
                         ),
-                        // Level 1
                         Positioned(
                           left: 50,
                           top: 80,
-                          child: InkWell(
-                            onTap: () {
-                              setState(() {
-                                selectedLevel = 1; // Pilih Level 1
-                              });
-                            },
-                            hoverColor: const Color.fromARGB(255, 255, 255, 255)
-                                .withOpacity(0.2), // Efek hover
-                            borderRadius: BorderRadius.circular(
-                                10), // Sesuaikan dengan border container
-                            child: Container(
-                              width: 308,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 12),
-                              decoration: BoxDecoration(
-                                color: selectedLevel == 1
-                                    ? const Color.fromARGB(255, 255, 255, 255)
-                                        .withOpacity(0.2)
-                                    : Colors.white,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: Colors.grey.shade300),
-                              ),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text(
-                                    'Level 1',
-                                    style: TextStyle(
-                                      color: Colors.black,
-                                      fontSize: 16,
-                                      fontFamily: 'Inter',
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  Container(
-                                    width: 24,
-                                    height: 24,
-                                    decoration: const BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: Colors.blue,
-                                    ),
-                                  ),
-                                ],
+                          child: Container(
+                            width: 308,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.grey.shade300),
+                            ),
+                            child: TextField(
+                              controller: _usernameController,
+                              enabled: !isUserAssigned,
+                              decoration: InputDecoration(
+                                border: InputBorder.none,
+                                hintText: isUserAssigned
+                                    ? 'Nama Pengguna: $username'
+                                    : 'Masukkan Nama Pengguna',
+                                hintStyle: TextStyle(color: Colors.grey),
                               ),
                             ),
+                          ),
+                        ),
+                        // Level 1
+                        Positioned(
+                          left: 50,
+                          top: 160,
+                          child: _buildLevelContainer(
+                            level: 1,
+                            isCompleted: isLevel1Completed,
+                            selectedLevel: selectedLevel,
+                            levelText: 'Level 1',
                           ),
                         ),
                         // Level 2
                         Positioned(
                           left: 50,
-                          top: 140,
-                          child: InkWell(
-                            onTap: () {
-                              if (isLevel1Completed) {
-                                setState(() {
-                                  selectedLevel = 2; // Pilih Level 2
-                                });
-                              } else {
-                                _showLockedLevelDialog(
-                                    context); // Tampilkan dialog level terkunci
-                              }
-                            },
-                            hoverColor:
-                                Colors.grey.withOpacity(0.2), // Efek hover
-                            borderRadius: BorderRadius.circular(
-                                10), // Sesuaikan dengan border container
-                            child: Container(
-                              width: 308,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 12),
-                              decoration: BoxDecoration(
-                                color: selectedLevel == 2
-                                    ? Colors.grey.withOpacity(0.2)
-                                    : Colors.white,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: Colors.grey.shade300),
-                              ),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text(
-                                    'Level 2',
-                                    style: TextStyle(
-                                      color: Colors.black,
-                                      fontSize: 16,
-                                      fontFamily: 'Inter',
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  if (!isLevel1Completed)
-                                    Icon(
-                                      Icons.lock,
-                                      color: Colors.grey.shade600,
-                                      size: 24,
-                                    ),
-                                ],
-                              ),
-                            ),
+                          top: 220,
+                          child: _buildLevelContainer(
+                            level: 2,
+                            isCompleted: isLevel2Completed,
+                            selectedLevel: selectedLevel,
+                            levelText: 'Level 2',
                           ),
                         ),
                         // Level 3
                         Positioned(
                           left: 50,
-                          top: 200,
-                          child: InkWell(
-                            onTap: () {
-                              if (isLevel2Completed) {
-                                setState(() {
-                                  selectedLevel = 3; // Pilih Level 3
-                                });
-                              } else {
-                                _showLockedLevelDialog(
-                                    context); // Tampilkan dialog level terkunci
-                              }
-                            },
-                            hoverColor:
-                                Colors.grey.withOpacity(0.2), // Efek hover
-                            borderRadius: BorderRadius.circular(
-                                10), // Sesuaikan dengan border container
-                            child: Container(
-                              width: 308,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 12),
-                              decoration: BoxDecoration(
-                                color: selectedLevel == 3
-                                    ? Colors.grey.withOpacity(0.2)
-                                    : Colors.white,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: Colors.grey.shade300),
-                              ),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text(
-                                    'Level 3',
-                                    style: TextStyle(
-                                      color: Colors.black,
-                                      fontSize: 16,
-                                      fontFamily: 'Inter',
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  if (!isLevel2Completed)
-                                    Icon(
-                                      Icons.lock,
-                                      color: Colors.grey.shade600,
-                                      size: 24,
-                                    ),
-                                ],
-                              ),
-                            ),
+                          top: 280,
+                          child: _buildLevelContainer(
+                            level: 3,
+                            isCompleted: isLevel3Completed,
+                            selectedLevel: selectedLevel,
+                            levelText: 'Level 3',
                           ),
                         ),
                         // Level 4
                         Positioned(
                           left: 50,
-                          top: 260,
-                          child: InkWell(
-                            onTap: () {
-                              if (isLevel2Completed) {
-                                setState(() {
-                                  selectedLevel = 4; // Pilih Level 4
-                                });
-                              } else {
-                                _showLockedLevelDialog(
-                                    context); // Tampilkan dialog level terkunci
-                              }
-                            },
-                            hoverColor:
-                                Colors.grey.withOpacity(0.2), // Efek hover
-                            borderRadius: BorderRadius.circular(
-                                10), // Sesuaikan dengan border container
-                            child: Container(
-                              width: 308,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 12),
-                              decoration: BoxDecoration(
-                                color: selectedLevel == 4
-                                    ? Colors.grey.withOpacity(0.2)
-                                    : Colors.white,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: Colors.grey.shade300),
-                              ),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text(
-                                    'Level 4',
-                                    style: TextStyle(
-                                      color: Colors.black,
-                                      fontSize: 16,
-                                      fontFamily: 'Inter',
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  if (!isLevel2Completed)
-                                    Icon(
-                                      Icons.lock,
-                                      color: Colors.grey.shade600,
-                                      size: 24,
-                                    ),
-                                ],
-                              ),
-                            ),
+                          top: 340,
+                          child: _buildLevelContainer(
+                            level: 4,
+                            isCompleted: isLevel4Completed,
+                            selectedLevel: selectedLevel,
+                            levelText: 'Level 4',
                           ),
                         ),
-                        // Tombol "Start Kuis"
                         Positioned(
                           left: 50,
-                          top: 340,
+                          top: 410,
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFFE2AC42),
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                              ),
+                                  borderRadius: BorderRadius.circular(20)),
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 100, vertical: 10),
                             ),
                             onPressed: () {
-                              if (selectedLevel != null) {
-                                // Navigasi ke halaman sesuai level yang dipilih
-                                switch (selectedLevel) {
-                                  case 1:
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (context) => Level1Screen(),
-                                      ),
-                                    );
-                                    break;
-                                  case 2:
-                                    // Navigasi ke Level2Screen (jika sudah dibuat)
-                                    break;
-                                  case 3:
-                                    // Navigasi ke Level3Screen (jika sudah dibuat)
-                                    break;
-                                  case 4:
-                                    // Navigasi ke Level4Screen (jika sudah dibuat)
-                                    break;
-                                }
-                              } else {
-                                // Tampilkan pesan jika belum memilih level
+                              if (!isUserAssigned &&
+                                  _usernameController.text.isNotEmpty) {
+                                _saveUsername(
+                                    deviceId, _usernameController.text);
+                              }
+                              if (selectedLevel != null && isUserAssigned) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => Level_Screen(
+                                      deviceId: deviceId,
+                                      quizId: widget.quizId,
+                                      level: selectedLevel!,
+                                      onLevelCompleted: () =>
+                                          _checkUserByDeviceId(),
+                                    ),
+                                  ),
+                                );
+                              } else if (!isUserAssigned) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text(
-                                        "Silakan pilih level terlebih dahulu."),
-                                  ),
+                                      content: Text(
+                                          "Masukkan nama pengguna terlebih dahulu.")),
+                                );
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                      content: Text(
+                                          "Silakan pilih level terlebih dahulu.")),
                                 );
                               }
                             },
                             child: const Text(
                               'Start Kuis',
                               style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 24,
-                                fontWeight: FontWeight.w600,
-                              ),
+                                  color: Colors.white,
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w600),
                             ),
                           ),
                         ),
@@ -431,87 +329,57 @@ class _LevelSelectionDialogState extends State<LevelSelectionDialog>
       },
     );
   }
-}
 
-class LockedLevelDialog extends StatelessWidget {
-  const LockedLevelDialog({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20.0),
-      ),
-      elevation: 0,
-      backgroundColor: Colors.transparent,
-      child: contentBox(context),
-    );
-  }
-
-  contentBox(BuildContext context) {
-    return Stack(
-      children: <Widget>[
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            shape: BoxShape.rectangle,
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.5),
-                spreadRadius: 5,
-                blurRadius: 7,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              const Icon(
-                Icons.lock,
-                size: 60,
-                color: Colors.orange,
-              ),
-              const SizedBox(height: 15),
-              const Text(
-                'Level Terkunci',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
-                ),
-              ),
-              const SizedBox(height: 10),
-              const Text(
-                'Silahkan selesaikan Level 1 terlebih dahulu.',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 22),
-              Align(
-                alignment: Alignment.bottomRight,
-                child: TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
-                  child: const Text(
-                    'OK',
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: Colors.orange,
-                    ),
-                  ),
-                ),
-              ),
-            ],
+  Widget _buildLevelContainer({
+    required int level,
+    required bool isCompleted,
+    required int? selectedLevel,
+    required String levelText,
+  }) {
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          this.selectedLevel = level;
+        });
+      },
+      child: Container(
+        width: 308,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white, // Warna latar belakang tetap putih
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selectedLevel == level
+                ? const Color.fromARGB(
+                    255, 0, 0, 0) // Warna border saat dipilih
+                : Colors.grey.shade300,
           ),
         ),
-      ],
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              levelText,
+              style: TextStyle(
+                color: Colors.black,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (isCompleted)
+              Icon(Icons.check_circle, color: Colors.green)
+            else
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: selectedLevel == level ? Colors.blue : Colors.black,
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
