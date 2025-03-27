@@ -44,10 +44,18 @@ dependencies:
   device_info_plus: ^10.1.0
   audioplayers: ^5.2.1
   shared_preferences: ^2.2.0
+  mockito: ^5.4.0
+  build_runner: ^2.4.0
+  flutter_lints: ^3.0.0
 
 dev_dependencies:
+  integration_test:
+    sdk: flutter
   flutter_test:
     sdk: flutter
+  flutter_driver:
+    sdk: flutter
+  test: ^1.24.0 # Pastikan versi terbaru
 
 flutter_launcher_icons:
   android: "launcher_icon"
