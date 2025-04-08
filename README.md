@@ -17,6 +17,11 @@ NeoQuiz sebuah platform kuis interaktif yang membantu Anda meningkatkan kemampua
 - flutter versi terbaru
 - emulator android Api 35
 
+## Cara membuat nya dengan
+- aplikasi menggunakan backend php native dengan dabatabase mysql
+- Container untuk mengatur tampilan agar lebih rapi.
+- Desain antarmuka yang menarik, minimal menggunakan warna dan padding yang sesuai.
+
 This project is a starting point for a Flutter application.
 
 A few resources to get you started if this is your first Flutter project:
