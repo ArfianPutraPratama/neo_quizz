@@ -1,8 +1,21 @@
-# coba
+# neo quiz
 
-A new Flutter project.
+NeoQuiz sebuah platform kuis interaktif yang membantu Anda meningkatkan kemampuan Anda dan memperluas pengetahuan Anda tentang pemrograman dan teknologi. Antarmukanya yang dinamis dan fitur-fiturnya yang inovatif membuat NeoQuiz menjadi platform belajar yang menyenangkan sekaligus menantang untuk pemula
 
-## Getting Started
+## hasil tampilan
+
+![Image](https://github.com/user-attachments/assets/82b39d6d-4c92-40a6-acef-36462a94b019)
+
+## 
+
+![Image](https://github.com/user-attachments/assets/5f1dbfd1-da06-4451-bd9a-3667f12d22c3)
+
+
+## Spesifikasi
+- bahasa dart (flutter)
+- database (mysql)
+- flutter versi terbaru
+- emulator android Api 35
 
 This project is a starting point for a Flutter application.
 
