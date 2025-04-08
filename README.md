@@ -22,7 +22,8 @@ NeoQuiz sebuah platform kuis interaktif yang membantu Anda meningkatkan kemampua
 - aplikasi menggunakan backend php native dengan database mysql
 - Container untuk mengatur tampilan agar lebih rapi.
 - Desain antarmuka yang menarik, minimal menggunakan warna dan padding yang sesuai.
-
+- api di tempatkan di folder services dan folder widgets
+ 
 ## backend 
 untuk php =>  https://github.com/ArfianPutraPratama/php_quizz.git 
 
