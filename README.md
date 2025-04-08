@@ -16,6 +16,7 @@ NeoQuiz sebuah platform kuis interaktif yang membantu Anda meningkatkan kemampua
 - database (mysql)
 - flutter versi terbaru
 - emulator android Api 35
+- Api => backend php native
 
 ## Cara membuat nya dengan
 - aplikasi menggunakan backend php native dengan dabatabase mysql
