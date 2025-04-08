@@ -19,7 +19,7 @@ NeoQuiz sebuah platform kuis interaktif yang membantu Anda meningkatkan kemampua
 - Api => backend php native
 
 ## Cara membuat nya dengan
-- aplikasi menggunakan backend php native dengan dabatabase mysql
+- aplikasi menggunakan backend php native dengan database mysql
 - Container untuk mengatur tampilan agar lebih rapi.
 - Desain antarmuka yang menarik, minimal menggunakan warna dan padding yang sesuai.
 
